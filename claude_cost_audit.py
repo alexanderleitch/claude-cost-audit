@@ -79,6 +79,8 @@ def pick(rows, ask):
 
 
 def tty_ask(prompt):
+    if sys.stdin.isatty():
+        return input(prompt)
     # stdin is the script itself under `curl ... | python3 -`, so read the terminal directly
     with open("CON" if os.name == "nt" else "/dev/tty", encoding="utf-8") as tty:
         print(prompt, end="", flush=True)
@@ -124,6 +126,9 @@ def main():
 
     print("\nPlugins with {hooks} inject text at start / on every prompt; check real size with /context.")
 
+    if args.pick and not rows:
+        print(f"\n--pick: no user-enabled plugins found in {claude / 'settings.json'}."
+              " Org-managed or project-scoped plugins are not listed; see /plugin.")
     names = args.disable + (pick(rows, tty_ask) if args.pick else [])
     if not names:
         print("Disable with --pick, --disable <plugin>, or: claude plugin disable <plugin>")
