@@ -49,9 +49,43 @@ Restart Claude Code afterwards.
 Other levers: `/clear` between unrelated tasks, `/compact` in long sessions, `/model sonnet` for
 routine work, fewer subagents, and shorter CLAUDE.md / memory files.
 
+## Morning briefing (shift your 5-hour window)
+
+Usage limits run in 5-hour windows that start at your first message. A scheduled run at, say,
+05:00 opens a window that resets at 10:00, so you get a fresh window mid-morning instead of one
+from 09:00 to 14:00. It does not add usage, and it counts toward your weekly cap.
+
+`morning/` makes that run useful: a **read-only** briefing of overnight commits, PRs awaiting your
+review, failing CI, assigned issues and (if connected) today's meetings and email, saved to
+`~/claude-briefings/YYYY-MM-DD.md`. Edit `morning/briefing-prompt.md` to change what it covers.
+
+Pick the time as: when you start work + an hour or two - 5 hours.
+
+Windows (wakes the PC from sleep, not from shutdown):
+
+    powershell -ExecutionPolicy Bypass -File morning\install-morning-briefing.ps1 -RepoPath C:\code\myrepo -At 5am
+    Start-ScheduledTask ClaudeMorningBriefing      # test it now
+
+macOS / Linux (cron does not wake a sleeping machine):
+
+    crontab -e
+    0 5 * * * /path/to/claude-cost-audit/morning/morning-briefing.sh /path/to/myrepo
+
+Settings, as environment variables:
+
+- `BRIEFING_MODEL` (default `sonnet`; `haiku` is cheaper)
+- `BRIEFING_DIR` (default `~/claude-briefings`)
+- `BRIEFING_EXTRA_TOOLS`: comma-separated extra tools to allow, such as calendar and mail read
+  tools. Find their names with `/mcp`. Allowing a whole server (`mcp__<server>`) also allows its
+  write tools, so name individual read tools when the connector can send email or edit files.
+
+Only the tools listed in the runner are allowed (read files, `git fetch/log/branch`,
+`gh pr/run/issue list`); everything else is denied, so the run cannot change anything.
+
 ## Test
 
     python3 test_claude_cost_audit.py
+    morning/test_morning_briefing.sh
 
 ## License
 
