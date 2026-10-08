@@ -36,7 +36,15 @@ numbers with `/context` inside Claude Code.
 
 ## Then cut
 
-    claude plugin disable <plugin>     # re-enable any time with: claude plugin enable <plugin>
+Let the script do it:
+
+    python3 claude_cost_audit.py --pick                  # asks y/N/q per plugin, biggest first
+    python3 claude_cost_audit.py --disable a@mkt b@mkt   # disable named plugins
+    python3 claude_cost_audit.py --pick --dry-run        # print the commands, change nothing
+
+Piped runs take the same flags, e.g. `irm <url> | python - --pick`.
+It calls `claude plugin disable <plugin>`; undo any time with `claude plugin enable <plugin>`.
+Restart Claude Code afterwards.
 
 Other levers: `/clear` between unrelated tasks, `/compact` in long sessions, `/model sonnet` for
 routine work, fewer subagents, and shorter CLAUDE.md / memory files.

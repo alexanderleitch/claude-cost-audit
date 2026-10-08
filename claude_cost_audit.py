@@ -3,10 +3,17 @@
 
 Read-only, stdlib only, Python 3.8+, macOS/Linux/Windows. Token figures are estimates (chars / 4).
 Run: python3 claude_cost_audit.py   (honours CLAUDE_CONFIG_DIR)
+     --pick              ask y/N/q per plugin, biggest first, then disable the yeses
+     --disable P [P...]  disable the named plugins
+     --dry-run           with either, print the commands instead of running them
 """
+import argparse
 import json
 import os
 import re
+import shutil
+import subprocess
+import sys
 from pathlib import Path
 
 EVERY_TURN_HOOKS = ("SessionStart", "UserPromptSubmit")
@@ -50,7 +57,41 @@ def plugin_cost(root):
     return chars, skills, servers, [h for h in EVERY_TURN_HOOKS if h in hooks]
 
 
+def disable_plugins(names, enabled, claude_bin, run):
+    """Run `claude plugin disable` for each enabled name; return names that were unknown or failed."""
+    failed = []
+    for name in names:
+        if name not in enabled or run([claude_bin, "plugin", "disable", name]) != 0:
+            failed.append(name)
+    return failed
+
+
+def pick(rows, ask):
+    """Offer each plugin, biggest first; return the ones answered y. q stops asking."""
+    chosen = []
+    for tok, name, *_ in rows:
+        answer = ask(f"Disable {name} (~{tok} tok)? [y/N/q] ").strip().lower()
+        if answer == "q":
+            break
+        if answer == "y":
+            chosen.append(name)
+    return chosen
+
+
+def tty_ask(prompt):
+    # stdin is the script itself under `curl ... | python3 -`, so read the terminal directly
+    with open("CON" if os.name == "nt" else "/dev/tty", encoding="utf-8") as tty:
+        print(prompt, end="", flush=True)
+        return tty.readline()
+
+
 def main():
+    parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+    parser.add_argument("--pick", action="store_true")
+    parser.add_argument("--disable", nargs="+", metavar="PLUGIN", default=[])
+    parser.add_argument("--dry-run", action="store_true")
+    args = parser.parse_args()
+
     claude = claude_dir()
     # ~/.claude.json sits beside ~/.claude by default, inside CLAUDE_CONFIG_DIR when set
     global_cfg = claude / ".claude.json" if os.environ.get("CLAUDE_CONFIG_DIR") else Path.home() / ".claude.json"
@@ -81,9 +122,30 @@ def main():
         if f.exists():
             print(f"{tokens(len(f.read_text(encoding='utf-8', errors='ignore'))):>6}  {f.relative_to(claude)}")
 
-    print("\nDisable with:  claude plugin disable <plugin>   (re-enable: claude plugin enable <plugin>)")
-    print("Plugins with {hooks} inject text at start / on every prompt; check real size with /context.")
+    print("\nPlugins with {hooks} inject text at start / on every prompt; check real size with /context.")
+
+    names = args.disable + (pick(rows, tty_ask) if args.pick else [])
+    if not names:
+        print("Disable with --pick, --disable <plugin>, or: claude plugin disable <plugin>")
+        return 0
+    for name in [n for n in names if n not in enabled]:
+        print(f"Skipping {name}: not an enabled plugin (names look like plugin@marketplace)", file=sys.stderr)
+    names = [n for n in names if n in enabled]
+    claude_bin = shutil.which("claude")
+    if args.dry_run or not claude_bin:
+        if not claude_bin:
+            print("`claude` not on PATH; run these yourself:")
+        for name in names:
+            print(f"claude plugin disable {name}")
+        return 0
+    failed = disable_plugins(names, enabled, claude_bin, run=lambda cmd: subprocess.run(cmd).returncode)
+    for name in failed:
+        print(f"Not disabled (not enabled, or the command failed): {name}", file=sys.stderr)
+    done = [n for n in names if n not in failed]
+    if done:
+        print(f"\nDisabled {len(done)}. Restart Claude Code. Undo: claude plugin enable <plugin>")
+    return 1 if failed else 0
 
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())
