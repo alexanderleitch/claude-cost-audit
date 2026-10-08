@@ -79,8 +79,11 @@ Settings, as environment variables:
   tools. Find their names with `/mcp`. Allowing a whole server (`mcp__<server>`) also allows its
   write tools, so name individual read tools when the connector can send email or edit files.
 
-Only the tools listed in the runner are allowed (read files, `git fetch/log/branch`,
-`gh pr/run/issue list`); everything else is denied, so the run cannot change anything.
+The runner does `git fetch` itself, then allows Claude only five exact read commands
+(`git log` and `gh pr/run/issue list` with fixed arguments) plus anything you add in
+`BRIEFING_EXTRA_TOOLS`. No wildcards: a rule like `Bash(git log:*)` would let text planted in a commit
+or PR add flags such as `--output=<file>`. If you change the commands in the prompt, change the
+runner's allowlist to match (the test checks this).
 
 ## Test
 
